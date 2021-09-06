@@ -32,33 +32,33 @@ def compute_metrics(idxs_tgt, idxs_pred, logits_tgt, logits_pred):
         "accuracy": (idxs_tgt == idxs_pred).sum() / float(idxs_tgt.size),
     }
 
+
 # @jax.jit
-
-
 def train_step(state, batch):
     labels = idx2onehot(batch)
 
     def loss_fn(params):
-        strs, idxs, logits = \
+        idxs, logits = \
             MemCpy().apply({"params": params}, labels)
         loss = optax.softmax_cross_entropy(logits, labels)
         loss = jnp.mean(loss)
-        return loss, (strs, idxs, logits)
+        return loss, (idxs, logits)
     grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
-    (loss, (strs, idxs_pred, logits)), grads = \
+    (_, (idxs_pred, logits)), grads = \
         grad_fn(state.params)
     state = state.apply_gradients(grads=grads)
-    return state, strs, \
+    return state, \
         compute_metrics(batch, idxs_pred, labels, logits)
 
 
 # @jax.jit
 def val_step(params, batch):
     labels = idx2onehot(batch)
-    strs, idxs_pred, logits = MemCpy(decode=False).apply(
+    idxs_pred, logits = MemCpy(decode=False).apply(
         {"params": params},
         labels)
-    return strs, compute_metrics(batch, idxs_pred, labels, logits)
+    return idxs_pred, \
+        compute_metrics(batch, idxs_pred, labels, logits)
 
 
 def train(batch_size: int, steps: int, rkey=random.PRNGKey(0),
@@ -66,12 +66,11 @@ def train(batch_size: int, steps: int, rkey=random.PRNGKey(0),
     rng, rng_init = random.split(rkey)
     state = create_train_state(rng_init, 0.001)
     del rng_init
-    for i in trange(steps):
+    for i in range(steps):
         rng, key_batch = random.split(rng)
         batch = get_batch(key_batch, batch_size)
-        state, _, metric = train_step(state, batch)
-        if i % 10 == 9:
-            print(f"Loss: {metric['loss']}; accuracy: {metric['accuracy']}")
+        state, metric = train_step(state, batch)
+        print(f"{i+1}/{steps} Loss: {metric['loss']}; accuracy: {metric['accuracy']}")
     return state
 
 
@@ -79,7 +78,10 @@ def validate(params, rng, batch_size):
     rng, rng_batch = random.split(rng)
     batch = get_batch(rng_batch, batch_size)
     strs = [idx2str(batch[i, :]) for i in range(batch.shape[0])]
-    strs_pred, metric = val_step(params, batch)
+    idxs_pred, metric = val_step(params, batch)
+    strs_pred = [
+        idx2str(idxs_pred[i, :])
+        for i in range(idxs_pred.shape[0])]
     print(f"Loss: {metric['loss']}; accuracy: {metric['accuracy']}")
     for tgt, pred in zip(strs, strs_pred):
         print(f"EXPECT : {tgt}")

@@ -23,11 +23,12 @@ def str2onehot(s: str) -> jnp.ndarray:
     ])
     return idx2onehot(idxs), idxs
 
-
+@jax.jit
 def idx2onehot(idxs: jnp.ndarray) -> jnp.ndarray:
     return jax.nn.one_hot(idxs, 26)
 
-def onehot2str(a: jnp.ndarray) -> Tuple[str, jnp.ndarray]:
+@jax.jit
+def onehot2idx(a: jnp.ndarray) -> Tuple[str, jnp.ndarray]:
     """ One-hot lower case alphabet to string
         Args:
             a: [L, 26]
@@ -35,8 +36,7 @@ def onehot2str(a: jnp.ndarray) -> Tuple[str, jnp.ndarray]:
             str, index array
     """
     idx = jnp.argmax(a, -1)
-    cs = idx + ord('a')
-    return "".join([chr(c) for c in cs]), idx
+    return idx
 
 
 def idx2str(idx):
@@ -45,9 +45,9 @@ def idx2str(idx):
 
 
 class MemCpy(nn.Module):
-    d_model: int = 256
+    d_model: int = 32
     decode: bool = False
-    decoder_hid: int = 512
+    decoder_hid: int = 128
 
     @nn.compact
     def __call__(self, input) -> Tuple[List[str], jnp.ndarray]:
@@ -83,6 +83,4 @@ class MemCpy(nn.Module):
         z = nn.Dense(26, 
             name="decoder_fc2")(z)
         # Conversion
-        w = [onehot2str(z[i, :, :]) for i in range(z.shape[0])]
-        strs, idxs = zip(*w)
-        return strs, jnp.stack(idxs), z
+        return onehot2idx(z), z
