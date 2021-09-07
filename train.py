@@ -24,6 +24,7 @@ def create_train_state(rng, lr):
     )
 
 
+@jax.jit
 def compute_metrics(idxs_tgt, idxs_pred, logits_tgt, logits_pred):
     return {
         "loss":
@@ -33,10 +34,9 @@ def compute_metrics(idxs_tgt, idxs_pred, logits_tgt, logits_pred):
     }
 
 
-# @jax.jit
 def train_step(state, batch):
     labels = idx2onehot(batch)
-
+    # @jax.jit
     def loss_fn(params):
         idxs, logits = \
             MemCpy().apply({"params": params}, labels)
@@ -51,7 +51,6 @@ def train_step(state, batch):
         compute_metrics(batch, idxs_pred, labels, logits)
 
 
-# @jax.jit
 def val_step(params, batch):
     labels = idx2onehot(batch)
     idxs_pred, logits = MemCpy(decode=False).apply(
